@@ -94,14 +94,9 @@ jobs:
           K3S_TOKEN: ${{ secrets.K3S_TOKEN }}
           K3S_CA_CRT: ${{ secrets.K3S_CA_CRT }}
 
-      - name: Apply Kubernetes manifests (from repo)
+      - name: Apply Kubernetes manifests (kustomize staging)
         run: |
-          kubectl apply -f k8s/cert-manager/
-          kubectl apply -f k8s/vault/
-          kubectl apply -f k8s/postgres/
-          kubectl apply -f k8s/backend/
-          kubectl apply -f k8s/frontend/
-          kubectl apply -f k8s/ingress/
+          kubectl apply -k manifests/staging
 
       - name: Update images on Deployments (immutable tags)
         run: |
