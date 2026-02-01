@@ -26,16 +26,4 @@ spec:
             # keep domain as base URL (your frontend uses /api/...).
             - name: REACT_APP_API_URL
               value: "https://devops-3.sociumtech.com"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: zyoud-frontend
-  namespace: zyoud
-spec:
-  selector:
-    app: zyoud-frontend
-  ports:
-    - name: http
-      port: 4200
-      targetPort: 4200
+
