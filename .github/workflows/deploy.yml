@@ -71,8 +71,6 @@ jobs:
     name: Deploy to K3s (Kustomize)
     runs-on: ubuntu-latest
 
-    # If push: wait for build job
-    # If manual deploy-only: run without build
     needs: [build]
     if: |
       github.event_name == 'push' ||
@@ -83,9 +81,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Figure out what TAG to deploy:
-      # - If build ran in this workflow: use build output tag
-      # - If deploy-only: use current commit short SHA
       - name: Set deploy tag
         shell: bash
         run: |
@@ -100,24 +95,20 @@ jobs:
         with:
           version: "v1.29.0"
 
-      - name: Debug K3S_SERVER (must not be 127.0.0.1)
-        shell: bash
-        run: |
-          echo "K3S_SERVER=${K3S_SERVER}"
-          if echo "${K3S_SERVER}" | grep -q "127.0.0.1"; then
-            echo "ERROR: K3S_SERVER is 127.0.0.1"
-            exit 1
-          fi
-        env:
-          K3S_SERVER: ${{ secrets.K3S_SERVER }}
-
       - name: Configure kubeconfig from Secret (plain text)
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p ~/.kube
-          printf "%s" "${KUBECONFIG_YAML}" > ~/.kube/config
 
+          # write kubeconfig (ensure newline at end)
+          printf "%s\n" "${KUBECONFIG_YAML}" > ~/.kube/config
+
+          # quick diagnostics (no secrets)
+          kubectl config current-context || true
+          kubectl cluster-info
+
+          # namespace-scoped checks
           kubectl -n "${NAMESPACE}" get pods
           kubectl -n "${NAMESPACE}" get deploy
         env:
