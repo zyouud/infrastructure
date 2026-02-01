@@ -58,31 +58,39 @@ jobs:
         env:
           K3S_SERVER: ${{ secrets.K3S_SERVER }}
 
-      - name: Configure kubeconfig (k3s) - NO SSH
+      - name: Configure kubeconfig (k3s) - robust (NO SSH)
+        shell: bash
         run: |
-          mkdir -p ~/.kube
-          cat > ~/.kube/config <<EOF
-          apiVersion: v1
-          kind: Config
-          clusters:
-          - name: k3s
-            cluster:
-              server: ${K3S_SERVER}
-              certificate-authority-data: ${K3S_CA_CRT}
-          contexts:
-          - name: zyoud
-            context:
-              cluster: k3s
-              namespace: ${NAMESPACE}
-              user: zyoud-gha
-          current-context: zyoud
-          users:
-          - name: zyoud-gha
-            user:
-              token: ${K3S_TOKEN}
-          EOF
+          set -euo pipefail
 
-          kubectl -n ${NAMESPACE} get pods
+          # Fail fast if secrets are empty
+          : "${K3S_SERVER:?K3S_SERVER is empty}"
+          : "${K3S_TOKEN:?K3S_TOKEN is empty}"
+          : "${K3S_CA_CRT:?K3S_CA_CRT is empty}"
+
+          mkdir -p ~/.kube
+
+          # Create kubeconfig via kubectl commands (avoids YAML indentation issues)
+          kubectl config set-cluster k3s \
+            --server="${K3S_SERVER}" \
+            --certificate-authority=/tmp/ca.crt \
+            --embed-certs=true
+
+          echo "${K3S_CA_CRT}" | base64 -d > /tmp/ca.crt
+
+          kubectl config set-credentials zyoud-gha --token="${K3S_TOKEN}"
+
+          kubectl config set-context zyoud \
+            --cluster=k3s \
+            --user=zyoud-gha \
+            --namespace="${NAMESPACE}"
+
+          kubectl config use-context zyoud
+
+          # Connectivity checks (non-interactive)
+          kubectl version --short
+          kubectl get ns
+          kubectl -n "${NAMESPACE}" get pods
         env:
           K3S_SERVER: ${{ secrets.K3S_SERVER }}
           K3S_TOKEN: ${{ secrets.K3S_TOKEN }}
