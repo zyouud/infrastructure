@@ -68,9 +68,8 @@ jobs:
           docker push "$FRONTEND_IMAGE:${TAG}"
 
   deploy:
-    name: Deploy to K3s (Kustomize)
+    name: Deploy to K3s (Kustomize dev)
     runs-on: ubuntu-latest
-
     needs: [build]
     if: |
       github.event_name == 'push' ||
@@ -100,21 +99,26 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ~/.kube
-
-          # write kubeconfig (ensure newline at end)
           printf "%s\n" "${KUBECONFIG_YAML}" > ~/.kube/config
-
-          # quick diagnostics (no secrets)
-          kubectl config current-context || true
-          kubectl cluster-info
-
-          # namespace-scoped checks
-          kubectl -n "${NAMESPACE}" get pods
-          kubectl -n "${NAMESPACE}" get deploy
         env:
           KUBECONFIG_YAML: ${{ secrets.KUBECONFIG_YAML }}
 
-      - name: Apply Kubernetes manifests (kustomize staging)
+      - name: Install kustomize
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sSfL https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh | bash
+          sudo mv kustomize /usr/local/bin/kustomize
+
+      - name: Set images in dev overlay (SHA tag)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd manifests/dev
+          kustomize edit set image ghcr.io/zyouud/apptraining-backend=${BACKEND_IMAGE}:${TAG}
+          kustomize edit set image ghcr.io/zyouud/apptraining-frontend=${FRONTEND_IMAGE}:${TAG}
+
+      - name: Apply Kubernetes manifests (kustomize dev)
         shell: bash
         run: |
           kubectl apply -k manifests/dev
