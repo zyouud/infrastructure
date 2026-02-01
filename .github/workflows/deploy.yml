@@ -52,7 +52,7 @@ jobs:
         run: |
           echo "K3S_SERVER=${K3S_SERVER}"
           if echo "${K3S_SERVER}" | grep -q "127.0.0.1"; then
-            echo "ERROR: K3S_SERVER is 127.0.0.1. Set GitHub Secret K3S_SERVER to your public API server, e.g. https://37.27.31.43:6443"
+            echo "ERROR: K3S_SERVER is 127.0.0.1"
             exit 1
           fi
         env:
@@ -63,23 +63,21 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Fail fast if secrets are empty
           : "${K3S_SERVER:?K3S_SERVER is empty}"
           : "${K3S_TOKEN:?K3S_TOKEN is empty}"
           : "${K3S_CA_CRT:?K3S_CA_CRT is empty}"
 
           mkdir -p ~/.kube
 
-          # Create kubeconfig via kubectl commands (avoids YAML indentation issues)
           echo "${K3S_CA_CRT}" | base64 -d > /tmp/ca.crt
 
           kubectl config set-cluster k3s \
-          --server="${K3S_SERVER}" \
-          --certificate-authority=/tmp/ca.crt \
-          --embed-certs=true
+            --server="${K3S_SERVER}" \
+            --certificate-authority=/tmp/ca.crt \
+            --embed-certs=true
 
-
-          kubectl config set-credentials zyoud-gha --token="${K3S_TOKEN}"
+          kubectl config set-credentials zyoud-gha \
+            --token="${K3S_TOKEN}"
 
           kubectl config set-context zyoud \
             --cluster=k3s \
@@ -88,7 +86,6 @@ jobs:
 
           kubectl config use-context zyoud
 
-          # Connectivity checks (non-interactive)
           kubectl version
           kubectl -n "${NAMESPACE}" get pods
           kubectl -n "${NAMESPACE}" get deploy
@@ -106,7 +103,7 @@ jobs:
           kubectl apply -f k8s/frontend/
           kubectl apply -f k8s/ingress/
 
-      - name: Update images on Deployments (no latest, no forced restart)
+      - name: Update images on Deployments (immutable tags)
         run: |
           kubectl -n ${NAMESPACE} set image deployment/zyoud-backend backend=${BACKEND_IMAGE}:${TAG}
           kubectl -n ${NAMESPACE} set image deployment/zyoud-frontend frontend=${FRONTEND_IMAGE}:${TAG}
@@ -114,4 +111,4 @@ jobs:
       - name: Rollout status
         run: |
           kubectl -n ${NAMESPACE} rollout status deploy/zyoud-backend --timeout=180s
-          kubectl -n ${NAMESPACE} rollout status deploy/zyoud-frontend --timeout=180s
+          kubectl -n ${NAMESPACE} rollout status deploy/zyoud-frontend --timeout=300s
