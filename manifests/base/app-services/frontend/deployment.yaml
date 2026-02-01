@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: ghcr.io/zyouud/apptraining/frontend:latest
+          image: ghcr.io/zyouud/apptraining-frontend:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 4200
