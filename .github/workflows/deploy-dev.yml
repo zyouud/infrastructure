@@ -119,12 +119,6 @@ jobs:
         run: |
           kubectl apply -k manifests/dev
 
-      - name: Update images on Deployments (immutable tags)
-        shell: bash
-        run: |
-          kubectl -n "${NAMESPACE}" set image deployment/zyoud-backend backend="${BACKEND_IMAGE}:${TAG}"
-          kubectl -n "${NAMESPACE}" set image deployment/zyoud-frontend frontend="${FRONTEND_IMAGE}:${TAG}"
-
       - name: Rollout status
         shell: bash
         run: |
