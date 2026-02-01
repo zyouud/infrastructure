@@ -4,6 +4,16 @@ on:
   push:
     branches: [ "main" ]
   workflow_dispatch:
+    inputs:
+      run_mode:
+        description: "What to run"
+        required: true
+        default: "build-and-deploy"
+        type: choice
+        options:
+          - build-and-deploy
+          - build-only
+          - deploy-only
 
 permissions:
   contents: read
@@ -15,12 +25,28 @@ env:
   BACKEND_IMAGE: ghcr.io/zyouud/apptraining-backend
 
 jobs:
-  build-and-deploy:
+  build:
+    name: Build & Push Images
     runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'push' ||
+      github.event.inputs.run_mode == 'build-and-deploy' ||
+      github.event.inputs.run_mode == 'build-only'
+
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set image tag (immutable)
+        id: tag
+        shell: bash
+        run: |
+          TAG="${GITHUB_SHA::7}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -29,19 +55,43 @@ jobs:
           username: ${{ secrets.GHCR_USERNAME }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Set image tags (immutable)
-        run: |
-          echo "TAG=${GITHUB_SHA::7}" >> $GITHUB_ENV
-
       - name: Build & push backend
         run: |
-          docker build -t "$BACKEND_IMAGE:$TAG" ./backend
-          docker push "$BACKEND_IMAGE:$TAG"
+          docker build -t "$BACKEND_IMAGE:${TAG}" ./backend
+          docker push "$BACKEND_IMAGE:${TAG}"
 
       - name: Build & push frontend
         run: |
-          docker build -t "$FRONTEND_IMAGE:$TAG" ./frontend
-          docker push "$FRONTEND_IMAGE:$TAG"
+          docker build -t "$FRONTEND_IMAGE:${TAG}" ./frontend
+          docker push "$FRONTEND_IMAGE:${TAG}"
+
+  deploy:
+    name: Deploy to K3s (Kustomize)
+    runs-on: ubuntu-latest
+
+    # If push: wait for build job
+    # If manual deploy-only: run without build
+    needs: [build]
+    if: |
+      github.event_name == 'push' ||
+      github.event.inputs.run_mode == 'build-and-deploy' ||
+      github.event.inputs.run_mode == 'deploy-only'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Figure out what TAG to deploy:
+      # - If build ran in this workflow: use build output tag
+      # - If deploy-only: use current commit short SHA
+      - name: Set deploy tag
+        shell: bash
+        run: |
+          if [ -n "${{ needs.build.outputs.tag }}" ]; then
+            echo "TAG=${{ needs.build.outputs.tag }}" >> "$GITHUB_ENV"
+          else
+            echo "TAG=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          fi
 
       - name: Setup kubectl
         uses: azure/setup-kubectl@v4
