@@ -90,8 +90,8 @@ jobs:
 
           # Connectivity checks (non-interactive)
           kubectl version
-          kubectl get ns
           kubectl -n "${NAMESPACE}" get pods
+          kubectl -n "${NAMESPACE}" get deploy
         env:
           K3S_SERVER: ${{ secrets.K3S_SERVER }}
           K3S_TOKEN: ${{ secrets.K3S_TOKEN }}
